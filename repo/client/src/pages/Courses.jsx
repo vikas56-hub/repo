@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import Stripe from 'stripe';
-import { Redirect } from 'react-router-dom';
-
+import React, { useState, useEffect } from "react";
+import Stripe from "stripe";
 
 function Courses() {
   const [prices, setPrices] = useState([]);
@@ -12,32 +10,33 @@ function Courses() {
     stripe.prices.list({ active: true }).then((data) => {
       setPrices(data.data);
     });
-  }, []);
+  }, []); 
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const cardElement = elements.getElement(CardElement);
+  const handleSubscribe = async (priceId) => {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-    let { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
-      payment_method: {
-        card: cardElement,
-        billing_details: {
-          name: name,
-        }
-      }
+    // Retrieve the product associated with the price ID
+    const price = await stripe.prices.retrieve(priceId);
+    const productId = price.product;
+
+    // Retrieve the product details
+    const product = await stripe.products.retrieve(productId);
+
+    // Create a Checkout Session with the price ID
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      payment_method_types: ["card"],
+      line_items: [{
+        price: priceId,
+        quantity: 1,
+      }],
+      success_url: "https://localhost:3000/api/userdashboard",
+      cancel_url: "https://localhost:3000/cancel",
     });
 
-    if (error) {
-      setMessages(error.message);
-      return;
-    }
-
-    paymentIntent(paymentIntent);
+    // Redirect the user to the Stripe Checkout page
+    window.location.href = session.url;
   };
-
-  if (paymentIntent && paymentIntent.status === 'succeeded') {
-    return <Redirect to={{ pathname: '../../userdasboard.js' }} />;
-  }
 
   return (
     <div>
@@ -45,7 +44,8 @@ function Courses() {
         <div key={price.id}>
           <h3>{price.nickname}</h3>
           <p>{price.unit_amount}</p>
-          <button onSubmit={handleSubmit} >Subscribe</button>
+          <p>{price.description}</p>
+          <button onClick={() => handleSubscribe(price.id)}>Subscribe</button>
         </div>
       ))}
     </div>
